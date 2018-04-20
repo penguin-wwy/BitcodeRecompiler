@@ -1,0 +1,8 @@
+target
+.vscode
+.idea
+
+*.o
+*.dSYM
+*.32
+*.64
