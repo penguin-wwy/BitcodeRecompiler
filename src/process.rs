@@ -54,12 +54,15 @@ impl MachOProcess {
                 return Ok(true);
             },
             &OFile::FatFile { magic, ref files } => {
+                writeln!(stderr(), "No support");
                 Ok(false)
             },
             &OFile::ArFile { ref files } => {
+                writeln!(stderr(), "No support");
                 Ok(false)
             },
             &OFile::SymDef { ref ranlibs } => {
+                writeln!(stderr(), "No support");
                 Ok(false)
             },
         }
