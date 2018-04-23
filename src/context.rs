@@ -6,7 +6,7 @@ use std::path::Path;
 use std::io::{Cursor, Read, Write, stderr};
 
 const DEFAULT_SDK: &'static str = "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk";
-const DEFAULT_TOOLCHAIN: &'static str = "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain";
+const DEFAULT_TOOLCHAIN: &'static str = "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/";
 
 pub struct FileContext<'a> {
     pub cur: Cursor<&'a [u8]>,
@@ -60,7 +60,8 @@ impl<'a> FileContext<'a> {
 }
 
 pub struct ReCompilerInfo {
-    sdk_path: String,
+    pub tool_chain: String,
+    pub sdk_path: String,
     pub obj_file: Vec<String>,
     pub link_framework: Vec<String>,
     pub link_options: Vec<String>,
@@ -68,11 +69,10 @@ pub struct ReCompilerInfo {
 }
 
 impl ReCompilerInfo {
-    pub fn new(sdk_path: Option<String>) -> ReCompilerInfo {
+    pub fn new(sdk_path: Option<String>, tool_chain: Option<String>) -> ReCompilerInfo {
         let mut sdk = String::new();
         match sdk_path {
             Some(s) => {
-                println!("ReCompilerInfo new ...");
                 if Path::new(&s).exists() {
                     sdk.push_str(s.as_str());
                 } else {
@@ -80,14 +80,34 @@ impl ReCompilerInfo {
                 }
             },
             None => {
-                println!("ReCompilerInfo err ...");
                 if Path::new(DEFAULT_SDK).exists() {
                     sdk.push_str(DEFAULT_SDK);
+                } else {
+                    writeln!(stderr(), "no sdk path.");
                 }
             },
         }
 
+        let mut tool = String::new();
+        match tool_chain {
+            Some(s) => {
+                if Path::new(&s).exists() {
+                    tool.push_str(s.as_str());
+                } else {
+                    writeln!(stderr(), "ToolChain path is not exist.");
+                }
+            },
+            None => {
+                if Path::new(DEFAULT_TOOLCHAIN).exists() {
+                    tool.push_str(DEFAULT_TOOLCHAIN);
+                } else {
+                    writeln!(stderr(), "no ToolChain path.");
+                }
+            }
+        }
+
         ReCompilerInfo {
+            tool_chain: tool,
             sdk_path: sdk,
             obj_file: Vec::new(),
             link_framework: Vec::new(),
