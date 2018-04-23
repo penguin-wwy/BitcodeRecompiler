@@ -3,7 +3,7 @@
 ### 构建
 
 ```
-https://github.com/penguin-wwy/BitcodeRecompiler.git
+git clone https://github.com/penguin-wwy/BitcodeRecompiler.git
 cd BitcodeRecompiler
 cargo build
 ```
@@ -30,7 +30,7 @@ cargo build
 ### Build
 
 ```
-https://github.com/penguin-wwy/BitcodeRecompiler.git
+git clone https://github.com/penguin-wwy/BitcodeRecompiler.git
 cd BitcodeRecompiler
 cargo build
 ```
