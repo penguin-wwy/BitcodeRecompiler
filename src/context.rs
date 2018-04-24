@@ -5,8 +5,12 @@ use self::failure::Error;
 use std::path::Path;
 use std::io::{Cursor, Read, Write, stderr};
 
-const DEFAULT_SDK: &'static str = "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk";
+const DEFAULT_IPHONE_SDK: &'static str = "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk";
+const DEFAULT_MACOSX_SDK: &'static str = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk";
 const DEFAULT_TOOLCHAIN: &'static str = "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/";
+
+const LIB_CLANG_OSX: &'static str = "libclang_rt.osx.a";
+const LIB_CLANG_IOS: &'static str = "libclang_rt.ios.a";
 
 pub struct FileContext<'a> {
     pub cur: Cursor<&'a [u8]>,
@@ -60,6 +64,8 @@ impl<'a> FileContext<'a> {
 }
 
 pub struct ReCompilerInfo {
+    pub platform: String,
+    pub lib_clang: String,
     pub tool_chain: String,
     pub sdk_path: String,
     pub obj_file: Vec<String>,
@@ -69,51 +75,22 @@ pub struct ReCompilerInfo {
 }
 
 impl ReCompilerInfo {
-    pub fn new(sdk_path: Option<String>, tool_chain: Option<String>) -> ReCompilerInfo {
-        let mut sdk = String::new();
-        match sdk_path {
-            Some(s) => {
-                if Path::new(&s).exists() {
-                    sdk.push_str(s.as_str());
-                } else {
-                    writeln!(stderr(), "sdk path is not exist.");
-                }
-            },
-            None => {
-                if Path::new(DEFAULT_SDK).exists() {
-                    sdk.push_str(DEFAULT_SDK);
-                } else {
-                    writeln!(stderr(), "no sdk path.");
-                }
-            },
-        }
-
-        let mut tool = String::new();
-        match tool_chain {
-            Some(s) => {
-                if Path::new(&s).exists() {
-                    tool.push_str(s.as_str());
-                } else {
-                    writeln!(stderr(), "ToolChain path is not exist.");
-                }
-            },
-            None => {
-                if Path::new(DEFAULT_TOOLCHAIN).exists() {
-                    tool.push_str(DEFAULT_TOOLCHAIN);
-                } else {
-                    writeln!(stderr(), "no ToolChain path.");
-                }
-            }
-        }
+    pub fn new() -> ReCompilerInfo {
 
         ReCompilerInfo {
-            tool_chain: tool,
-            sdk_path: sdk,
+            platform: String::new(),
+            lib_clang: String::new(),
+            tool_chain: String::new(),
+            sdk_path: String::new(),
             obj_file: Vec::new(),
             link_framework: Vec::new(),
             link_options: Vec::new(),
             file_compile: Vec::new(),
         }
+    }
+
+    pub fn set_platform(&mut self, data: String) {
+        self.platform = data;
     }
 
     pub fn push_framework(&mut self, framework: &mut String) {
@@ -141,5 +118,77 @@ impl ReCompilerInfo {
     }
     pub fn add_file_cmd(&mut self, cmd: String) {
         self.file_compile.last_mut().unwrap().push(cmd);
+    }
+
+    pub fn choose_path_from_platform(&mut self, sdk_path: Option<String>, tool_chain: Option<String>) -> Result<bool, Error> {
+
+        match self.platform.as_ref() {
+            "MacOSX" => {
+                self.lib_clang.push_str(LIB_CLANG_OSX);
+            },
+            "iPhoneOS" => {
+                self.lib_clang.push_str(LIB_CLANG_IOS);
+            },
+            _ => {
+                writeln!(stderr(), "no support platform.");
+                return Ok(false);
+            }
+        };
+
+        match sdk_path {
+            Some(s) => {
+                if !Path::new(&s).exists() {
+                    writeln!(stderr(), "sdk path is not exist.");
+                    return Ok(false);
+                }
+                match s.find(self.platform.as_str()) {
+                    Some(_) => {},
+                    None => {
+                        writeln!(stderr(), "the sdk is inconsistent with the platform.");
+                        return Ok(false);
+                    },
+                };
+                self.sdk_path.push_str(s.as_str());
+            },
+            None => {
+                let s = String::from(match self.platform.as_ref() {
+                    "MacOSX" => {
+                        DEFAULT_MACOSX_SDK
+                    },
+                    "iPhoneOS" => {
+                        DEFAULT_IPHONE_SDK
+                    },
+                    _ => {
+                        writeln!(stderr(), "no support platform.");
+                        return Ok(false);
+                    }
+                });
+                if !Path::new(&s).exists() {
+                    writeln!(stderr(), "no sdk path.");
+                    return Ok(false);
+                }
+                self.sdk_path.push_str(s.as_str());
+            },
+        };
+
+        match tool_chain {
+            Some(s) => {
+                if !Path::new(&s).exists() {
+                    writeln!(stderr(), "ToolChain path is not exist.");
+                    return Ok(false);
+                }
+                self.tool_chain.push_str(s.as_str());
+            },
+            None => {
+                if Path::new(DEFAULT_TOOLCHAIN).exists() {
+                    self.tool_chain.push_str(DEFAULT_TOOLCHAIN);
+                } else {
+                    writeln!(stderr(), "no ToolChain path.");
+                    return Ok(false);
+                }
+            },
+        };
+
+        return Ok(true);
     }
 }

@@ -22,15 +22,15 @@ pub struct MachOProcess {
 }
 
 impl MachOProcess {
-    pub fn new(sdk_path: Option<String>, tool_chain: Option<String>) -> MachOProcess {
+    pub fn new() -> MachOProcess {
         MachOProcess {
-            re_info: ReCompilerInfo::new(sdk_path, tool_chain),
+            re_info: ReCompilerInfo::new(),
             xml_file: String::from("tmp.xml"),
             xar_file: String::from("tmp.xar"),
         }
     }
 
-    pub fn handle_ofile(&mut self, ofile: &OFile, ctxt: &mut FileContext) -> Result<bool, Error> {
+    pub fn handle_ofile(&mut self, ofile: &OFile, ctxt: &mut FileContext, sdk_path: Option<String>, tool_chain: Option<String>) -> Result<bool, Error> {
 
         match ofile {
             &OFile::MachFile {
@@ -38,7 +38,7 @@ impl MachOProcess {
                 ref commands,
             } => {
                 if self.handle_macho_file(header, commands, ctxt).unwrap() == true {
-                    if self.parse_xml().unwrap() == false {
+                    if self.parse_xml(sdk_path, tool_chain).unwrap() == false {
                         writeln!(stderr(), "parse xml failed.")?;
                         return Ok(false);
                     }
@@ -71,6 +71,19 @@ impl MachOProcess {
     fn parse_element<T>(&mut self, parse: &mut EventReader<T>, local_name: &String) -> Result<bool, Error> where T: Read {
 
         match local_name.as_str() {
+            "platform" => {
+                loop {
+                    match parse.next().unwrap() {
+                        XmlEvent::Characters( data ) => {
+                            self.re_info.set_platform(data.clone());
+                        },
+                        XmlEvent::EndElement { name } => {
+                            break;
+                        },
+                        _ => {}
+                    }
+                };
+            },
             "option" => {
                 loop {
                     match parse.next().unwrap() {
@@ -136,7 +149,7 @@ impl MachOProcess {
         return Ok(true);
     }
 
-    fn parse_xml(&mut self) -> Result<bool, Error> {
+    fn parse_xml(&mut self, sdk_path: Option<String>, tool_chain: Option<String>) -> Result<bool, Error> {
 
         let xml_file = fs::File::open(self.xml_file.as_str()).expect("tmp xml file open failed.");
         let xml_file = BufReader::new(xml_file);
@@ -154,13 +167,19 @@ impl MachOProcess {
                 }
                 XmlEvent::StartElement { name, .. } => {
                     //println!("xml node start: {}", name);
-                    self.parse_element::<BufReader<fs::File>>(&mut parse, &name.local_name).unwrap();
+                    if self.parse_element::<BufReader<fs::File>>(&mut parse, &name.local_name).unwrap() == false {
+                        return Ok(false);
+                    }
                 },
                 XmlEvent::EndElement { name } => {
                     //println!("xml node end: {}", name);
                 },
                 _ => {},
             }
+        }
+
+        if self.re_info.choose_path_from_platform(sdk_path, tool_chain).unwrap() == false {
+            return Ok(false);
         }
 
         for index in 0..self.re_info.file_compile.len() {
@@ -285,11 +304,11 @@ impl MachOProcess {
         }
 
         let mut search = Command::new("find")
-            .arg(&self.re_info.tool_chain)
+            .arg(self.re_info.tool_chain.clone())
             .arg("-name")
-            .arg("libclang_rt.ios.a")
+            .arg(self.re_info.lib_clang.clone())
             .output()
-            .expect("find libclang_rt.ios.a error.");
+            .expect("find libclang_rt error.");
         if search.status.success() {
             if let Ok(mut lib_clang)= String::from_utf8(search.stdout) {
                 //lib_clang.retain(|c| c != '\n');
@@ -297,11 +316,12 @@ impl MachOProcess {
                 link_options.push("-lSystem".to_string());
                 link_options.push(lib_clang);
             } else {
-                writeln!(stderr(), "find libclang_rt.ios.a error.");
+                writeln!(stderr(), "find libclang_rt error.");
                 return Ok(false);
             }
         } else {
-            writeln!(stderr(), "find libclang_rt.ios.a failed.");
+            //println!("{}, {}, {}",self.re_info.sdk_path, self.re_info.tool_chain, self.re_info.lib_clang);
+            writeln!(stderr(), "find libclang_rt failed.");
             return Ok(false);
         }
 

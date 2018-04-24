@@ -38,6 +38,7 @@ fn main() {
     let mut opts = Options::new();
     opts.optopt("", "sdk", "Specifies the sdk path", "sdk_path");
     opts.optopt("", "tool", "Specifies the ToolChain path", "tool_chain");
+    opts.optopt("f", "file", "Specifies the input file", "");
 
     let matchs = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -48,17 +49,8 @@ fn main() {
         }
     };
 
-    if matchs.free.is_empty() {
-        println!("at least one file must be specified");
-
-        print_usage(&program, opts);
-
-        exit(-1);
-    }
-
-    let mut mach_process = MachOProcess::new(matchs.opt_str("sdk"), matchs.opt_str("tool"));
-    for file_name in matchs.free {
-
+    let mut mach_process = MachOProcess::new();
+    if let Some(file_name) = matchs.opt_str("file") {
         let file = fs::File::open(file_name).unwrap();
         let mmap = unsafe { Mmap::map(&file).unwrap() };
         let payload: &[u8] = mmap.as_ref();
@@ -66,6 +58,9 @@ fn main() {
         let ofile = OFile::parse(&mut cur).unwrap();
         let mut filectx = FileContext::new(payload);
 
-        mach_process.handle_ofile(&ofile, &mut filectx);
+        mach_process.handle_ofile(&ofile, &mut filectx, matchs.opt_str("sdk"), matchs.opt_str("tool"));
+    } else {
+        println!("at least one file must be specified");
+        print_usage(&program, opts);
     }
 }
